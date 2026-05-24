@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>WebBlox</title>
+  <link rel="icon" href="favicon.png" type="image/x-icon">
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./coi-serviceworker.js').then(function(reg) {
+        if (!crossOriginIsolated) { location.reload(); }
+      });
+    }
+  </script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d1117;
+      color: #fff;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      overflow: hidden;
+      width: 100%; height: 100%;
+    }
+
+    /* ── background gradient ── */
+    #bg {
+      position: fixed; inset: 0;
+      background: linear-gradient(160deg, #0d1117 0%, #14213d 50%, #0d1117 100%);
+      z-index: 0;
+    }
+    #bg::after {
+      content: '';
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 80% 40% at 50% 100%, rgba(232,58,58,0.08) 0%, transparent 70%),
+        radial-gradient(ellipse 60% 30% at 20% 0%,   rgba(60,100,200,0.1) 0%, transparent 70%);
+    }
+
+    /* ── pick screen ── */
+    #pick-screen {
+      position: fixed; inset: 0; z-index: 100;
+      display: flex; flex-direction: column; align-items: center;
+      overflow: hidden;
+    }
+
+    /* ── header ── */
+    #header {
+      width: 100%; padding: 18px 24px 14px;
+      display: flex; align-items: center; justify-content: center;
+      border-bottom: 1px solid #ffffff14;
+      background: rgba(0,0,0,0.35);
+      backdrop-filter: blur(6px);
+      flex-shrink: 0;
+    }
+    #header img { height: 42px; }
+    #mp-link {
+      color: #4caf50; font-size: 13px; text-decoration: none;
+      border: 1px solid #4caf50; padding: 6px 14px;
+      border-radius: 4px; letter-spacing: 0.5px;
+      transition: background 0.15s;
+    }
+    #mp-link:hover { background: rgba(76,175,80,0.15); }
+
+    /* ── body layout ── */
+    #body {
+      flex: 1; width: 100%; max-width: 900px; padding: 20px 16px 10px;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    #body h2 {
+      font-size: 13px; color: #888; letter-spacing: 1px;
+      text-transform: uppercase; margin-bottom: 10px;
+    }
+
+    /* ── search ── */
+    #search {
+      width: 100%; padding: 10px 14px;
+      background: #1c2233; border: 1px solid #2a3347;
+      color: #fff; font-size: 14px; border-radius: 6px;
+      outline: none; margin-bottom: 10px;
+    }
+    #search::placeholder { color: #555; }
+    #search:focus { border-color: #e83a3a; }
+
+    /* ── game list ── */
+    #game-list {
+      flex: 1; overflow-y: auto; border-radius: 6px;
+      border: 1px solid #1e2a3a; background: #111827;
+      min-height: 0;
+    }
+    #game-list::-webkit-scrollbar { width: 6px; }
+    #game-list::-webkit-scrollbar-track { background: #0d1117; }
+    #game-list::-webkit-scrollbar-thumb { background: #2a3a4a; border-radius: 3px; }
+
+    .game-row {
+      display: flex; align-items: center; justify-content: center;
+      padding: 10px 14px; cursor: pointer;
+      border-bottom: 1px solid #ffffff08;
+      transition: background 0.1s;
+    }
+    .game-row:last-child { border-bottom: none; }
+    .game-row:hover { background: #1a2235; }
+    .game-row.selected { background: #1a2a1a; border-left: 3px solid #e83a3a; }
+    .game-name { font-size: 13px; color: #e0e0e0; }
+    .game-size { font-size: 11px; color: #445; }
+
+    /* ── bottom area ── */
+    #bottom {
+      flex-shrink: 0; padding: 10px 0 0;
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+    }
+
+    #divider { font-size: 11px; color: #444; }
+
+    #drop-zone {
+      border: 1px dashed #2a3a4a; border-radius: 6px;
+      padding: 8px 20px; cursor: pointer; text-align: center;
+      width: 100%;
+    }
+    #drop-zone:hover { border-color: #e83a3a; }
+    #drop-zone span { color: #666; font-size: 12px; }
+
+    #sel-info { font-size: 12px; color: #4caf50; min-height: 16px; }
+
+    #play-btn {
+      padding: 12px 70px; font-size: 18px; font-weight: bold;
+      background: #e83a3a; color: #fff; border: none;
+      border-radius: 6px; cursor: pointer; letter-spacing: 1px;
+      transition: background 0.15s, opacity 0.15s;
+      margin-top: 4px;
+    }
+    #play-btn:disabled { opacity: 0.35; cursor: default; background: #555; }
+    #play-btn:not(:disabled):hover { background: #c42a2a; }
+
+    /* ── loading screen ── */
+    #loading {
+      position: fixed; inset: 0; z-index: 9999;
+      background: #0d1117;
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+    }
+    #loading img { width: 320px; margin-bottom: 36px; }
+    #loading-bar-wrap {
+      width: 320px; height: 6px; background: #1a2235; border-radius: 3px; overflow: hidden;
+      margin-bottom: 12px;
+    }
+    #loading-bar { height: 100%; width: 0%; background: #e83a3a; border-radius: 3px; transition: width 0.3s; }
+    #loading-text { color: #aaa; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div id="bg"></div>
+
+  <!-- Pick screen -->
+  <div id="pick-screen">
+    <div id="header">
+      <img src="WebBlox.png" alt="WebBlox">
+    </div>
+
+    <div id="body">
+      <h2>Browse Games — <span id="count-label">652</span> available</h2>
+
+      <input id="search" type="text" placeholder="&#128269; Search 652 games..." oninput="filterGames()">
+
+      <div id="game-list"><div id="list-inner"></div></div>
+
+      <div id="bottom">
+        <div id="divider">— or upload your own .rbxl file —</div>
+        <div id="drop-zone"
+             ondragover="event.preventDefault();this.style.borderColor='#e83a3a'"
+             ondragleave="this.style.borderColor=''"
+             ondrop="handleDrop(event)">
+          <span>Drag & drop a .rbxl file here or </span>
+          <input id="file-input" type="file" accept=".rbxl,.rbxlx" onchange="handleFile(this.files[0])" style="color:#aaa;font-size:12px">
+        </div>
+        <div id="sel-info"></div>
+        <button id="play-btn" disabled onclick="launch()">PLAY</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading screen -->
+  <div id="loading">
+    <img src="WebBlox.png" alt="WebBlox">
+    <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
+    <span id="loading-text">Loading...</span>
+  </div>
+
+  <canvas id="canvas" oncontextmenu="return false"
+          style="display:block;position:fixed;inset:0;width:100vw;height:100vh;z-index:1"></canvas>
+
+  <!-- Background music (plays on first interaction) -->
+  <audio id="bgm" loop preload="auto">
+    <source src="main_menu.mp3" type="audio/mpeg">
+  </audio>
+
+  <script src="gamelist.js"></script>
+  <script>
+    // ── background music ────────────────────────────────────────────────────
+    var bgm = document.getElementById('bgm');
+    var bgmStarted = false;
+    function startMusic() {
+      if (bgmStarted) return;
+      bgmStarted = true;
+      bgm.volume = 0.5;
+      bgm.play().catch(function() {});
+    }
+    document.addEventListener('click', startMusic, { once: true });
+    document.addEventListener('keydown', startMusic, { once: true });
+
+    // ── state ────────────────────────────────────────────────────────────────
+    var selectedGameUrl  = null;
+    var selectedGameName = null;
+    var placeBytes       = null;
+    var currentFilter    = GAMES;
+
+    // ── render ───────────────────────────────────────────────────────────────
+    function escHtml(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function renderList(games) {
+      var inner = document.getElementById('list-inner');
+      inner.innerHTML = '';
+      document.getElementById('count-label').textContent = games.length;
+      games.forEach(function(g) {
+        var row = document.createElement('div');
+        row.className = 'game-row';
+        row.innerHTML =
+          '<span class="game-name">' + escHtml(g.n) + '</span>' +
+          '<span class="game-size">' + (g.s / 1048576).toFixed(1) + ' MB</span>';
+        row.onclick = function() {
+          document.querySelectorAll('.game-row').forEach(function(r){ r.classList.remove('selected'); });
+          row.classList.add('selected');
+          selectGame(g.n, g.u);
+        };
+        inner.appendChild(row);
+      });
+      if (!games.length) {
+        inner.innerHTML = '<div style="padding:20px;color:#444;font-size:13px">No games match your search.</div>';
+      }
+    }
+
+    function filterGames() {
+      var q = document.getElementById('search').value.toLowerCase();
+      currentFilter = q ? GAMES.filter(function(g){ return g.n.toLowerCase().indexOf(q) !== -1; }) : GAMES;
+      renderList(currentFilter);
+    }
+
+    renderList(GAMES);
+
+    // ── selection ────────────────────────────────────────────────────────────
+    function selectGame(name, url) {
+      selectedGameUrl  = url;
+      selectedGameName = name;
+      placeBytes       = null;
+      document.getElementById('sel-info').textContent = '\u2713  ' + name;
+      document.getElementById('file-input').value = '';
+      document.getElementById('play-btn').disabled = false;
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      document.getElementById('drop-zone').style.borderColor = '';
+      handleFile(e.dataTransfer.files[0]);
+    }
+
+    function handleFile(file) {
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function(ev) {
+        placeBytes       = ev.target.result;
+        selectedGameUrl  = null;
+        selectedGameName = file.name;
+        document.getElementById('sel-info').textContent = '\u2713  ' + file.name + ' (custom)';
+        document.querySelectorAll('.game-row').forEach(function(r){ r.classList.remove('selected'); });
+        document.getElementById('play-btn').disabled = false;
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    // ── launch ───────────────────────────────────────────────────────────────
+    function setBar(pct) {
+      document.getElementById('loading-bar').style.width = pct + '%';
+    }
+    function setLoadText(t) {
+      document.getElementById('loading-text').textContent = t;
+    }
+
+    function launch() {
+      // stop menu music
+      bgm.pause(); bgm.currentTime = 0;
+
+      document.getElementById('pick-screen').style.display = 'none';
+      var loadingDiv = document.getElementById('loading');
+      loadingDiv.style.display = 'flex';
+      document.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+
+      var CHUNK_COUNT = 12;
+      var loaded = 0;
+
+      var chunksPromise = Promise.all(
+        Array.from({ length: CHUNK_COUNT }, function(_, i) {
+          return fetch('rblx.data.' + i).then(function(r) {
+            if (!r.ok) throw new Error('chunk ' + i + ' failed');
+            return r.arrayBuffer().then(function(b) {
+              loaded++;
+              setBar(Math.round(loaded / CHUNK_COUNT * 70));
+              setLoadText('Loading engine ' + Math.round(loaded / CHUNK_COUNT * 100) + '%');
+              return b;
+            });
+          });
+        })
+      ).then(function(chunks) {
+        var total = chunks.reduce(function(s,c){ return s + c.byteLength; }, 0);
+        var out = new Uint8Array(total), off = 0;
+        chunks.forEach(function(c){ out.set(new Uint8Array(c), off); off += c.byteLength; });
+        return URL.createObjectURL(new Blob([out], { type: 'application/octet-stream' }));
+      });
+
+      var placePromise;
+      if (placeBytes) {
+        placePromise = Promise.resolve(new Uint8Array(placeBytes));
+      } else {
+        setLoadText('Fetching ' + selectedGameName + '...');
+        placePromise = fetch(selectedGameUrl)
+          .then(function(r){
+            if (!r.ok) throw new Error('Failed to fetch place: ' + r.status);
+            return r.arrayBuffer();
+          })
+          .then(function(buf){ return new Uint8Array(buf); });
+      }
+
+      Promise.all([chunksPromise, placePromise]).then(function(results) {
+        var blobUrl = results[0];
+        var placeU8 = results[1];
+        setBar(80);
+        setLoadText('Starting engine...');
+
+        var _orig = window.fetch.bind(window);
+        window.fetch = function(resource, init) {
+          var url = typeof resource === 'string' ? resource : (resource && resource.url) || '';
+          if (/rblx\.data$/.test(url)) return _orig(blobUrl, init);
+          return _orig(resource, init);
+        };
+
+        var hideFallback = setTimeout(function(){ loadingDiv.style.display = 'none'; }, 90000);
+
+        window.Module = {
+          canvas: document.getElementById('canvas'),
+          onRuntimeInitialized: function() {
+            try { FS.writeFile('/content/game.rbxl', placeU8); } catch(e) {}
+          },
+          print:    function(){},
+          printErr: function(t){ console.error('[rblx]', t); },
+          setStatus: function(t) {
+            if (!t) {
+              clearTimeout(hideFallback);
+              setBar(100);
+              loadingDiv.style.display = 'none';
+              return;
+            }
+            var m = t.match(/\((\d+)\/(\d+)\)/);
+            if (m) {
+              var pct = 80 + Math.round(parseInt(m[1],10) / parseInt(m[2],10) * 20);
+              setBar(pct);
+            }
+          },
+        };
+
+        var s = document.createElement('script');
+        s.src = 'rblx.js';
+        document.body.appendChild(s);
+
+      }).catch(function(err) {
+        setLoadText('Error: ' + err.message);
+      });
+    }
+  </script>
+</body>
+</html>
